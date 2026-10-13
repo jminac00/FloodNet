@@ -1,4 +1,4 @@
-# FloodNet Track 1 — U-Net híbrida CNN + ViT
+# FloodNet — U-Net híbrida CNN + ViT
 
 Segmentación semántica de imágenes aéreas tomadas por dron después del huracán
 Harvey: asignar a **cada píxel** una de diez clases (agua, edificio inundado,
@@ -8,14 +8,23 @@ extensión de la inundación y qué infraestructura ha quedado afectada.
 Todo el trabajo vive en un único cuaderno, `floodnet-segmentation.ipynb`, pensado
 para leerse de arriba abajo: monta el entorno, audita los datos, construye el
 modelo, lo entrena y lo evalúa, explicando en cada paso por qué se hace así y no
-de otra forma. El cuaderno del repositorio está ejecutado de principio a fin, así
-que todas las cifras de aquí abajo se pueden contrastar con sus salidas.
+de otra forma. Dos cuadernos más entrenan DeepLabV3+ y YOLO11n-seg sobre la misma
+partición para comparar.
+
+> **Rama `dataset-completo`.** Los tres cuadernos entrenan ahora sobre el dataset
+> **FloodNet-Supervised v1.0 completo** (2.343 imágenes con máscara) en lugar de las
+> 398 imágenes etiquetadas de Track 1. Las salidas de los cuadernos se han limpiado
+> porque correspondían al dataset reducido: hay que volver a ejecutarlos. Las cifras
+> de la sección *Resultados* son las de la versión anterior y se conservan como
+> referencia. La versión anterior completa sigue en la rama `main`.
 
 ---
 
 ## Resultados
 
-Conjunto de test: ~41 imágenes que no se han visto en ningún momento del
+### Referencia: dataset reducido (317 / 40 / 41)
+
+Conjunto de test: ~41 imágenes que no se habían visto en ningún momento del
 entrenamiento. Se evalúa el checkpoint que mejor mIoU dio en validación, con
 *test-time augmentation* por volteos.
 
@@ -45,20 +54,10 @@ de la columna IoU, y 0.777 esa misma media dejando *Background* fuera. Ambas
 salen de una única matriz de confusión acumulada sobre todo el test, no de
 promediar resultados por lote.
 
-Tres lecturas:
-
-- **Las clases inundadas funcionan.** *Building-flooded* llega a 0.831 de IoU y
-  *Road-flooded* a 0.679, que son las dos clases que de verdad importan para la
-  tarea. Salen bien pese a ser minoritarias, lo que sugiere que el oversampling
-  con augmentación diferenciada y los pesos por clase están haciendo su trabajo.
-- **Los puntos débiles son *Vehicle* y *Background*.** Los vehículos (0.573)
-  ocupan pocos píxeles a 512×512 y se pierden en el reescalado. *Background*
-  (0.144) no es un objeto: es la etiqueta residual de lo que no encaja en las
-  otras nueve, ocupa una fracción mínima de la imagen y no tiene una apariencia
-  consistente que aprender. Por eso se reporta también el mIoU sin ella.
-- **El test son ~41 imágenes.** Conviene leer estas cifras como un orden de
-  magnitud. Una diferencia de dos o tres puntos entre variantes del modelo no
-  sería distinguible del ruido con una muestra así.
+Estas cifras **no se podrán comparar directamente** con las del dataset completo:
+aquel test eran 41 imágenes con máscaras corregidas a mano y el nuevo son 426 con las
+máscaras oficiales, que tienen errores de anotación (ver *Los datos*). Lo que sí es
+comparable es la clasificación entre los tres modelos, porque los tres se miden igual.
 
 ### Nota sobre cómo se miden
 
@@ -85,10 +84,10 @@ número global son consistentes por construcción.
 
 | Archivo | Qué es |
 |---|---|
-| [floodnet-segmentation.ipynb](floodnet-segmentation.ipynb) | El cuaderno principal, ejecutado entero. Entorno, datos, modelo, entrenamiento y evaluación. |
+| [floodnet-segmentation.ipynb](floodnet-segmentation.ipynb) | El cuaderno principal. Entorno, datos, modelo, entrenamiento y evaluación. |
 | [floodnet-deeplabv3plus.ipynb](floodnet-deeplabv3plus.ipynb) | Comparación: DeepLabV3+ (ResNet-50) con el mismo split, exportado a ONNX. |
 | [floodnet-yolo11n-seg.ipynb](floodnet-yolo11n-seg.ipynb) | Comparación: YOLO11n-seg con las máscaras convertidas en polígonos, mismo split, exportado a ONNX. |
-| [hybrid-cnn-vit-attention-u-net.ipynb](hybrid-cnn-vit-attention-u-net.ipynb) | El cuaderno de Kaggle que se tomó como punto de partida. Se conserva para poder comparar. |
+| [original-hybrid-cnn-vit-attention-u-net.ipynb](original-hybrid-cnn-vit-attention-u-net.ipynb) | El cuaderno de Kaggle que se tomó como punto de partida. Se conserva para poder comparar. |
 | [pyproject.toml](pyproject.toml) | Dependencias del proyecto, gestionadas con `uv`. |
 | [uv.lock](uv.lock) | Versiones exactas resueltas, para reproducir el entorno bit a bit. |
 
@@ -100,53 +99,72 @@ modelos exportados (`models/`, `runs/`) quedan fuera del repositorio por tamaño
 
 ## Los datos
 
-Se usan dos datasets de Kaggle, y hace falta bajar los dos:
+Se usa **FloodNet-Supervised v1.0**, la versión del dataset que publica máscara para
+todas las imágenes, más las máscaras corregidas a mano de un dataset de Kaggle:
 
 | Dataset | Para qué |
 |---|---|
-| [FloodNet Challenge — aerial imagery](https://www.kaggle.com/datasets/aletbm/aerial-imagery-dataset-floodnet-challenge) | El dataset oficial del reto. De aquí sale `class_mapping.csv`, el mapa de índice a nombre de clase. |
-| [FloodNet segmentation — fixed masks](https://www.kaggle.com/datasets/catashiro31/floodnet-dataset-for-segmentation-fixed-mask) | Las mismas 398 imágenes supervisadas, pero con las máscaras reparadas. Es la fuente real de entrenamiento. |
+| [FloodNet-Supervised v1.0](https://github.com/BinaLab/FloodNet-Supervised_v1.0) | Las 2.343 imágenes con máscara y su reparto oficial train / val / test. El mapa índice → clase sale de su `DATASET-VERSION-NOTE-v1.0.txt`. |
+| [FloodNet segmentation — fixed masks](https://www.kaggle.com/datasets/catashiro31/floodnet-dataset-for-segmentation-fixed-mask) | 398 máscaras corregidas a mano (las de Track 1, todas de la partición `train`). Sustituyen a la oficial cuando existen. Opcional: sin esta carpeta se usan solo las oficiales. |
 
 Descomprímelos bajo `data/` con esta estructura:
 
 ```
 data/
-├── FloodNet Challenge - Track 1/
-│   ├── class_mapping.csv
-│   ├── Train/ · Validation/ · Test/
+├── FloodNet/
+│   └── FloodNet-Supervised_v1.0/
+│       ├── DATASET-VERSION-NOTE-v1.0.txt
+│       ├── train/  (train-org-img · train-label-img — 1.445 imágenes)
+│       ├── val/    (val-org-img   · val-label-img   —   450 imágenes)
+│       └── test/   (test-org-img  · test-label-img  —   448 imágenes)
 ├── data_finally/
-│   ├── train/  (image · mask · mask_colored — 317 imágenes)
-│   └── val/    (image · mask · mask_colored —  81 imágenes)
-└── cache512/   ← lo genera el cuaderno, no lo descargues
+│   ├── train/mask   ┐ 398 máscaras corregidas
+│   └── val/mask     ┘
+├── cache512_full/   ← lo genera el cuaderno, no lo descargues
+└── yolo512_full/    ← lo genera el cuaderno de YOLO
 ```
 
-### Por qué hacen falta las máscaras reparadas
+La versión anterior usaba `data/FloodNet Challenge - Track 1/`, `data/cache512` y
+`data/yolo512`. Los cuadernos nuevos ya no los leen ni los tocan.
 
-Parte de las máscaras del dataset oficial están corruptas: etiquetan los
-4000×3000 píxeles enteros con una sola clase. La máscara de la imagen `10165`,
-por ejemplo, marca la foto completa como *Water*, y su PNG pesa 15 KB para 12
-megapíxeles — el tamaño al que comprime una imagen de color uniforme. Entrenar
-con ellas enseña al modelo justo lo contrario de lo que se busca. La sección 1.2
-del cuaderno incluye la auditoría que las localiza.
+### Las máscaras oficiales tienen errores
 
-### Por qué el split está rehecho
+Hay dos tipos de fallo en las máscaras oficiales:
 
-FloodNet Track 1 tiene 398 imágenes con máscara (`Train/Labeled`); sus
-particiones `Validation` y `Test` oficiales son ciegas, sin etiquetas. El
-cuaderno de partida entrenaba con las 398 y validaba sobre `data_finally/val`,
-que son **81 de esas mismas 398**: el 100 % de su validación se había visto
-durante el entrenamiento, así que sus métricas estaban infladas.
+- **Máscaras de una sola clase.** Etiquetan los 12 megapíxeles enteros con una
+  clase. La de `10165`, por ejemplo, marca toda la foto como *Water* y su PNG pesa
+  15 KB, el tamaño al que comprime una imagen uniforme. Hay 84 en train, 16 en val y
+  22 en test, casi todas *Grass*.
+- **Regiones con la clase equivocada.** Hierba o árboles etiquetados como agua o
+  como *Background*. En las 398 imágenes que tienen corrección, 138 máscaras
+  oficiales difieren en más de un 5 % de sus píxeles de la versión corregida y 88 en
+  más de un 10 %. Los cambios más frecuentes son *Water → Grass* y *Tree → Grass*.
 
-Aquí `data_finally` es la única fuente y se respeta su separación:
+Qué se hace con ello (sección 1 del cuaderno, con la auditoría en la 1.3):
 
-| Partición | Origen | Imágenes |
-|---|---|---:|
-| train | `data_finally/train` | 317 |
-| val | mitad de `data_finally/val` | 40 |
-| test | otra mitad de `data_finally/val` | 41 |
+1. Si una imagen tiene máscara corregida, se usa esa.
+2. Las máscaras oficiales de una sola clase se excluyen de las tres particiones.
+3. El resto de máscaras oficiales se usa tal cual: el segundo tipo de error no se
+   puede detectar sin una referencia. Eso incluye val y test, así que **las métricas
+   se miden contra referencias con algo de ruido**.
 
-El cuaderno comprueba con un `assert` que ninguna imagen aparece en dos
-particiones.
+### La partición
+
+Se respeta el reparto oficial y ninguna imagen cambia de partición:
+
+| Partición | Oficial | Excluidas | Usadas |
+|---|---:|---:|---:|
+| train | 1.445 | 58 | 1.387 |
+| val | 450 | 16 | 434 |
+| test | 448 | 22 | 426 |
+
+Los tres cuadernos comprueban con un `assert` estos tamaños y que ninguna imagen
+aparece en dos particiones, y los de comparación guardan la lista exacta de imágenes
+de cada partición en su JSON de configuración.
+
+Frente a la versión anterior, que partía 81 imágenes por la mitad para tener val y
+test, el test es ahora diez veces mayor: diferencias de uno o dos puntos entre modelos
+empiezan a ser distinguibles del ruido.
 
 ---
 
@@ -173,6 +191,10 @@ pesa lo suyo. Las siguientes son casi instantáneas gracias a la caché de `uv`.
 Después, abre el cuaderno y **selecciona el kernel `FloodNet (Python 3.12)`**
 antes de ejecutar nada más. Las secciones 0.x del propio cuaderno repiten estos
 pasos y verifican que la GPU se ve.
+
+La primera ejecución construye `data/cache512_full` (2.343 imágenes reducidas a
+512×512, ~1,2 GB), que tarda del orden de 15-20 minutos. Los otros dos cuadernos la
+reutilizan.
 
 Las ruedas apuntan a **CUDA 12.6**. Con otra versión de CUDA, o sin GPU, cambia
 el índice de PyTorch en `pyproject.toml` por el que corresponda.
@@ -207,7 +229,7 @@ Cabeza 1×1 → 10 clases     (+ 2 cabezas auxiliares, deep supervision)
 ```
 
 La idea detrás de la mezcla: la CNN aporta el sesgo inductivo de localidad y
-texturas que hace falta con solo 317 imágenes de entrenamiento, mientras los
+texturas que hace falta con un dataset de un millar largo de imágenes, mientras los
 bloques Transformer dan el campo receptivo global que distingue una carretera
 anegada de un río — algo que depende del contexto de toda la escena, no del
 parche local. Las *attention gates* filtran cada skip antes de concatenarlo, para
@@ -224,11 +246,10 @@ que el decoder no reintroduzca ruido de las capas superficiales.
 | Scheduler | CosineAnnealingWarmRestarts (T₀ = 10, T_mult = 2) |
 | Precisión | Mixta (AMP) con GradScaler |
 | Batch | 4 imágenes de 512×512 |
-| Épocas | 30, con 554 iteraciones cada una tras el oversampling |
+| Épocas | 30, con ~875 iteraciones cada una tras el oversampling |
+| Oversampling | `target_ratio = 0.5`: cada clase rara hasta ~650 apariciones por época |
 | Regularización | Early stopping sobre la pérdida de validación |
 | Inferencia | TTA: promedio sobre la imagen y sus tres volteos |
-
-Mejores cifras de validación alcanzadas: mIoU 0.716, Dice 0.795, accuracy 0.932.
 
 Un par de decisiones que merecen explicación:
 
@@ -236,7 +257,9 @@ Un par de decisiones que merecen explicación:
   clases raras se repiten dentro de cada época. Las copias reciben augmentación
   agresiva (deformación elástica, distorsión de rejilla, rotaciones amplias) y
   los originales una suave, de modo que las repeticiones aporten variedad real en
-  vez de ser duplicados que invitan al sobreajuste.
+  vez de ser duplicados que invitan al sobreajuste. Con 317 imágenes se igualaban
+  todas las clases (`target_ratio = 1.0`); con 1.387 eso daría épocas de ~8.700
+  imágenes, así que se baja a 0.5 (~3.500 imágenes por época).
 - **Caché a 512×512.** Los originales son JPEG de 4000×3000. Decodificar 12
   megapíxeles en cada época convertiría la CPU en el cuello de botella. Se
   reescalan una sola vez: la imagen con `INTER_AREA` y la máscara con
@@ -244,8 +267,12 @@ Un par de decisiones que merecen explicación:
   que no existen (el punto medio entre la clase 2 y la 4 sería un 3, que es otra
   clase distinta, no una mezcla).
 
-En una RTX 4060 Laptop, una época ronda los 2 min 40 s. El cuaderno completo,
-entrenamiento incluido, tarda unos 75 minutos.
+En una RTX 4060 Laptop, una época del dataset completo ronda los 4 minutos de
+entrenamiento más 1-2 de validación con TTA: unas 2,5-3 horas las 30 épocas.
+
+Los checkpoints se guardan en `models/` con el sufijo `_full`
+(`best_model_iou_full.pth`, `best_vit_unet_dice_full.pth`,
+`best_model_loss_full.pth`), para no pisar los del entrenamiento anterior.
 
 ---
 
@@ -277,24 +304,37 @@ producía colores falseados.
 
 ## Limitaciones conocidas
 
+- **Las referencias de val y test tienen ruido.** Salvo las de una sola clase, que
+  se excluyen, las máscaras oficiales de val y test se usan tal cual, y por lo visto
+  en las 398 corregidas una parte relevante tiene regiones mal etiquetadas. Las
+  métricas absolutas quedan por debajo de lo que mediría una referencia limpia.
 - **La pérdida de validación no es comparable con la de entrenamiento.**
   `val_loss_fn` recibe las probabilidades promediadas por el TTA y se las pasa a
   `nn.CrossEntropyLoss`, que espera logits. La curva sirve para ver la tendencia
-  y para el early stopping (que en esta ejecución nunca llegó a dispararse), pero
-  su valor absoluto está en otra escala que el de entrenamiento. Las métricas
-  reportadas arriba no dependen de esto.
-- **No se fija semilla en PyTorch.** El split es reproducible (`SEED = 42` en
-  `train_test_split`), pero la inicialización de pesos y el orden de los lotes no,
-  así que dos entrenamientos no dan pesos idénticos.
+  y para el early stopping, pero su valor absoluto está en otra escala que el de
+  entrenamiento. Las métricas reportadas no dependen de esto.
+- **No se fija semilla en PyTorch** en el cuaderno principal: la inicialización de
+  pesos y el orden de los lotes cambian entre ejecuciones, así que dos
+  entrenamientos no dan pesos idénticos. El split es el oficial y no depende de
+  ninguna semilla.
 
 ---
 
 ## Modelos de comparación
 
 Dos cuadernos independientes entrenan modelos estándar con **exactamente la misma partición**
-(317 / 40 / 41, `SEED = 42`, comprobada con `assert`) y a la misma resolución, 512×512, reutilizando
-`data/cache512`. Los dos se evalúan con la misma `SegMetrics` y dejan su modelo en ONNX para
+(1.387 / 434 / 426, comprobada con `assert`) y a la misma resolución, 512×512, reutilizando
+`data/cache512_full`. Los dos se evalúan con la misma `SegMetrics` y dejan su modelo en ONNX para
 medir la inferencia en el mismo equipo.
+
+Ajustes al pasar al dataset completo:
+
+- **DeepLabV3+**: 40 épocas en lugar de 80. Cada época tiene ahora 173 lotes en vez de 39, así que
+  el entrenamiento hace más del doble de pasos que antes.
+- **YOLO11n-seg**: se mantienen las 300 épocas como techo, con `patience = 50` en lugar de 100. La
+  conversión a polígonos reconstruye las 2.247 máscaras usadas con un mIoU de 0.984.
+
+Resultados de referencia con el dataset reducido (317 / 40 / 41):
 
 | | U-Net híbrido | DeepLabV3+ R50 | YOLO11n-seg |
 |---|---:|---:|---:|
@@ -305,22 +345,22 @@ medir la inferencia en el mismo equipo.
 | Post-proceso fuera del ONNX | — | `argmax` | NMS + máscaras + repintado |
 
 - **DeepLabV3+** es un *baseline* semántico limpio (CE ponderada + Dice, sin oversampling ni TTA).
-  Queda a ~2 puntos del U-Net y pierde sobre todo en *Vehicle* y *Pool*.
 - **YOLO11n-seg** es de instancias, y FloodNet no tiene instancias sino regiones. Para entrenarlo,
   cada componente conexa de cada clase se trata como un objeto y su contorno se convierte en
-  polígono. La conversión reconstruye las máscaras con un mIoU de 0.976, así que no es el cuello de
-  botella. YOLO va bien en edificios, pero cae en las carreteras (regiones largas y troceadas) y deja
-  ~5 % de píxeles sin predicción.
+  polígono.
 
 Cada cuaderno tiene una celda **P** con todos los parámetros. Esa celda se vuelca, junto con la lista
 de imágenes de cada partición, el contrato de entrada/salida del ONNX y los resultados, a
-`models/<modelo>_config.json`. Los dos ONNX esperan la misma entrada: `images`, float32 RGB en
+`models/<modelo>_full_config.json`. Los dos ONNX esperan la misma entrada: `images`, float32 RGB en
 [0, 1], 1×3×512×512.
 
 | Fichero | Salidas |
 |---|---|
-| `models/deeplabv3plus_r50_floodnet.onnx` | `logits` 1×10×512×512 |
-| `models/yolo11n_seg_floodnet.onnx` | `output0` 1×46×5376 (cajas, clases, coeficientes) · `output1` 1×32×128×128 (prototipos) |
+| `models/deeplabv3plus_r50_floodnet_full.onnx` | `logits` 1×10×512×512 |
+| `models/yolo11n_seg_floodnet_full.onnx` | `output0` 1×46×5376 (cajas, clases, coeficientes) · `output1` 1×32×128×128 (prototipos) |
+
+Todos los artefactos del dataset completo llevan el sufijo `_full` (y `runs/yolo/yolo11n-seg-full`
+para YOLO), de modo que los del entrenamiento anterior siguen en su sitio.
 
 `onnxruntime-gpu` está fijado a la 1.24 en `pyproject.toml`: las ruedas recientes de PyPI se
 compilan contra CUDA 13 y no cargan junto a PyTorch cu126.
@@ -329,11 +369,8 @@ compilan contra CUDA 13 y no cargan junto a PyTorch cu126.
 
 ## Por dónde seguir
 
-- Aprovechar las 1.047 imágenes sin etiquetar de `Train/Unlabeled` con
-  entrenamiento semisupervisado (pseudo-etiquetado o consistencia).
-- Validación cruzada en lugar de un único split: con 40 imágenes de validación,
-  la varianza entre particiones pesa más que muchas de las diferencias que se
-  miden.
+- Limpiar las máscaras oficiales de val y test, aunque sea en una muestra, para tener
+  una referencia sin ruido con la que calibrar cuánto penaliza el ruido actual.
 - Probar resolución 768 o inferencia por tiles. *Vehicle* es la clase que más lo
   pediría: a 512 píxeles un coche ocupa muy pocos píxeles y su IoU lo refleja.
 - Tratar *Background* como `ignore_index` también en la pérdida, no solo al
