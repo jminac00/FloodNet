@@ -185,3 +185,8 @@ data/
 *.pth
 *.pt
 .venv/
+
+# Modelos exportados y ejecuciones de entrenamiento
+models/
+runs/
+*.onnx

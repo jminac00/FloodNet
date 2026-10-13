@@ -24,6 +24,16 @@ dependencies = [
     "jupyterlab>=4.2",
     "ipykernel>=6.29",
     "ipywidgets>=8.1",
+    # --- modelos de comparacion (YOLO-seg y DeepLabV3+) ---
+    "ultralytics>=8.4.177",
+    "segmentation-models-pytorch>=0.5.0",
+    # --- exportacion e inferencia ONNX ---
+    "onnx>=1.23.2",
+    "onnxscript>=0.7.2",        # exportador de torch.onnx (dynamo)
+    "onnxslim>=0.1.98",         # lo usa Ultralytics al exportar; declarado para que no lo autoinstale
+    # Las ruedas recientes de PyPI (p. ej. 1.31) se compilan contra CUDA 13 y no cargan
+    # junto a torch cu126. La 1.24 esta comprobada con CUDA 12.
+    "onnxruntime-gpu>=1.24,<1.25",
 ]
 
 [tool.uv]
