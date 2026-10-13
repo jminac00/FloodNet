@@ -86,12 +86,15 @@ número global son consistentes por construcción.
 | Archivo | Qué es |
 |---|---|
 | [floodnet-segmentation.ipynb](floodnet-segmentation.ipynb) | El cuaderno principal, ejecutado entero. Entorno, datos, modelo, entrenamiento y evaluación. |
+| [floodnet-deeplabv3plus.ipynb](floodnet-deeplabv3plus.ipynb) | Comparación: DeepLabV3+ (ResNet-50) con el mismo split, exportado a ONNX. |
+| [floodnet-yolo11n-seg.ipynb](floodnet-yolo11n-seg.ipynb) | Comparación: YOLO11n-seg con las máscaras convertidas en polígonos, mismo split, exportado a ONNX. |
 | [hybrid-cnn-vit-attention-u-net.ipynb](hybrid-cnn-vit-attention-u-net.ipynb) | El cuaderno de Kaggle que se tomó como punto de partida. Se conserva para poder comparar. |
 | [pyproject.toml](pyproject.toml) | Dependencias del proyecto, gestionadas con `uv`. |
 | [uv.lock](uv.lock) | Versiones exactas resueltas, para reproducir el entorno bit a bit. |
 
-El dataset, la caché de imágenes y los checkpoints entrenados (~350 MB cada uno)
-quedan fuera del repositorio por tamaño; los excluye [.gitignore](.gitignore).
+El dataset, la caché de imágenes, los checkpoints entrenados (~350 MB cada uno) y los
+modelos exportados (`models/`, `runs/`) quedan fuera del repositorio por tamaño; los excluye
+[.gitignore](.gitignore).
 
 ---
 
@@ -283,6 +286,44 @@ producía colores falseados.
 - **No se fija semilla en PyTorch.** El split es reproducible (`SEED = 42` en
   `train_test_split`), pero la inicialización de pesos y el orden de los lotes no,
   así que dos entrenamientos no dan pesos idénticos.
+
+---
+
+## Modelos de comparación
+
+Dos cuadernos independientes entrenan modelos estándar con **exactamente la misma partición**
+(317 / 40 / 41, `SEED = 42`, comprobada con `assert`) y a la misma resolución, 512×512, reutilizando
+`data/cache512`. Los dos se evalúan con la misma `SegMetrics` y dejan su modelo en ONNX para
+medir la inferencia en el mismo equipo.
+
+| | U-Net híbrido | DeepLabV3+ R50 | YOLO11n-seg |
+|---|---:|---:|---:|
+| mIoU test (10 clases) | 0.714 | 0.696 | 0.678 |
+| mIoU test (sin *Background*) | 0.777 | 0.756 | 0.738 |
+| Parámetros | — | 26.7 M | 2.9 M |
+| TTA | sí | no | no |
+| Post-proceso fuera del ONNX | — | `argmax` | NMS + máscaras + repintado |
+
+- **DeepLabV3+** es un *baseline* semántico limpio (CE ponderada + Dice, sin oversampling ni TTA).
+  Queda a ~2 puntos del U-Net y pierde sobre todo en *Vehicle* y *Pool*.
+- **YOLO11n-seg** es de instancias, y FloodNet no tiene instancias sino regiones. Para entrenarlo,
+  cada componente conexa de cada clase se trata como un objeto y su contorno se convierte en
+  polígono. La conversión reconstruye las máscaras con un mIoU de 0.976, así que no es el cuello de
+  botella. YOLO va bien en edificios, pero cae en las carreteras (regiones largas y troceadas) y deja
+  ~5 % de píxeles sin predicción.
+
+Cada cuaderno tiene una celda **P** con todos los parámetros. Esa celda se vuelca, junto con la lista
+de imágenes de cada partición, el contrato de entrada/salida del ONNX y los resultados, a
+`models/<modelo>_config.json`. Los dos ONNX esperan la misma entrada: `images`, float32 RGB en
+[0, 1], 1×3×512×512.
+
+| Fichero | Salidas |
+|---|---|
+| `models/deeplabv3plus_r50_floodnet.onnx` | `logits` 1×10×512×512 |
+| `models/yolo11n_seg_floodnet.onnx` | `output0` 1×46×5376 (cajas, clases, coeficientes) · `output1` 1×32×128×128 (prototipos) |
+
+`onnxruntime-gpu` está fijado a la 1.24 en `pyproject.toml`: las ruedas recientes de PyPI se
+compilan contra CUDA 13 y no cargan junto a PyTorch cu126.
 
 ---
 
