@@ -16,6 +16,7 @@ dependencies = [
     "numpy>=2.0",
     "pandas>=2.2",
     "scikit-learn>=1.5",
+    "openpyxl>=3.1",            # leer y escribir el libro de resultados (floodnet_resultados.xlsx)
     # --- visualizacion ---
     "matplotlib>=3.9",
     "seaborn>=0.13",
