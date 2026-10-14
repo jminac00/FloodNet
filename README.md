@@ -62,6 +62,48 @@ Tres lecturas:
 - **El test es ahora diez veces mayor** (426 imágenes frente a 41), así que las
   diferencias de un par de puntos entre modelos ya dicen algo.
 
+### ¿Se segmenta peor lo que menos aparece?
+
+En buena parte, sí. La sección 2.1 del cuaderno cuenta qué parte de los píxeles se lleva
+cada clase y la 6.5 lo cruza con la IoU de test; todo queda en la hoja *Distribución de
+clases* de [floodnet_resultados.xlsx](floodnet_resultados.xlsx).
+
+| Clase | % de píxeles (train) | % de imágenes (train) | Ocupa cuando aparece | IoU U-Net |
+|---|---:|---:|---:|---:|
+| Grass | 55.47 % | 94.1 % | 58.5 % | 0.884 |
+| Tree | 18.11 % | 83.3 % | 22.1 % | 0.815 |
+| Water | 10.95 % | 50.4 % | 22.8 % | 0.772 |
+| Road-non-flooded | 5.85 % | 52.6 % | 11.3 % | 0.833 |
+| Building-non-flooded | 3.35 % | 39.4 % | 8.4 % | 0.806 |
+| Road-flooded | 2.74 % | 11.7 % | 22.4 % | 0.666 |
+| Building-flooded | 1.69 % | 11.0 % | 15.6 % | 0.707 |
+| Background | 1.43 % | 7.4 % | 22.4 % | 0.526 |
+| Pool | 0.21 % | 24.2 % | 0.9 % | 0.680 |
+| Vehicle | 0.19 % | 36.4 % | 0.5 % | 0.626 |
+
+Se mide sobre las máscaras a 512×512 con las que se entrena y evalúa. Como todas miden lo
+mismo, la media por imagen del % de píxeles coincide con el % global; por eso la columna
+*Ocupa cuando aparece* promedia solo las imágenes en las que la clase está (de las tres
+particiones).
+
+- **La IoU sigue a la representación.** La correlación de Spearman entre el % de píxeles en
+  train y la IoU de test es de 0.85–0.88 en los tres modelos (p ≤ 0.002), y se mantiene
+  quitando *Background*. Las cuatro clases peor segmentadas son cuatro de las cinco con
+  menos píxeles.
+- **Pero hay dos tipos de clase minoritaria.** *Road-flooded*, *Building-flooded* y
+  *Background* son **escasas**: salen en el 7–12 % de las imágenes, aunque cuando salen
+  ocupan un 16–22 % de la foto. *Vehicle* y *Pool* son **pequeñas**: salen en una de cada
+  tres o cuatro imágenes, pero ocupan menos del 1 % de cada una. A las primeras les faltan
+  ejemplos; a las segundas, píxeles por objeto, y eso apunta a más resolución más que a
+  más imágenes.
+- ***Background* rinde menos de lo que su representación predice.** Con siete veces más
+  píxeles que *Vehicle*, su IoU es la más baja de los tres modelos. Es una etiqueta
+  residual sin aspecto propio, y parte de los errores de anotación de las máscaras
+  oficiales son hierba o árbol marcados como *Background* (ver *Los datos*).
+
+Con solo diez clases la correlación es orientativa: no separa la falta de ejemplos de otras
+causas que van con ella, como el tamaño de los objetos o lo ambiguo de sus bordes.
+
 ### Frente a la versión con el dataset reducido
 
 | Métrica | Dataset reducido (41 test) | Dataset completo (426 test) |
@@ -108,6 +150,7 @@ número global son consistentes por construcción.
 | [floodnet-deeplabv3plus.ipynb](floodnet-deeplabv3plus.ipynb) | Comparación: DeepLabV3+ (ResNet-50) con el mismo split, exportado a ONNX. |
 | [floodnet-yolo11n-seg.ipynb](floodnet-yolo11n-seg.ipynb) | Comparación: YOLO11n-seg con las máscaras convertidas en polígonos, mismo split, exportado a ONNX. |
 | [original-hybrid-cnn-vit-attention-u-net.ipynb](original-hybrid-cnn-vit-attention-u-net.ipynb) | El cuaderno de Kaggle que se tomó como punto de partida. Se conserva para poder comparar. |
+| [floodnet_resultados.xlsx](floodnet_resultados.xlsx) | Resultados de test de los tres modelos (globales, por clase y por imagen), sus parámetros y la distribución de clases del dataset. La hoja *Léeme* explica cada hoja. |
 | [pyproject.toml](pyproject.toml) | Dependencias del proyecto, gestionadas con `uv`. |
 | [uv.lock](uv.lock) | Versiones exactas resueltas, para reproducir el entorno bit a bit. |
 
