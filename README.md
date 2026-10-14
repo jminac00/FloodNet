@@ -11,53 +11,73 @@ modelo, lo entrena y lo evalúa, explicando en cada paso por qué se hace así y
 de otra forma. Dos cuadernos más entrenan DeepLabV3+ y YOLO11n-seg sobre la misma
 partición para comparar.
 
-> **Rama `dataset-completo`.** Los tres cuadernos entrenan ahora sobre el dataset
-> **FloodNet-Supervised v1.0 completo** (2.343 imágenes con máscara) en lugar de las
-> 398 imágenes etiquetadas de Track 1. Las salidas de los cuadernos se han limpiado
-> porque correspondían al dataset reducido: hay que volver a ejecutarlos. Las cifras
-> de la sección *Resultados* son las de la versión anterior y se conservan como
-> referencia. La versión anterior completa sigue en la rama `main`.
+Los tres cuadernos entrenan sobre el dataset **FloodNet-Supervised v1.0 completo**
+(2.343 imágenes con máscara, 2.247 tras la limpieza) y están ejecutados de principio
+a fin, así que todas las cifras de aquí abajo se pueden contrastar con sus salidas. La
+versión anterior, entrenada con las 398 imágenes etiquetadas de Track 1, se conserva en
+la etiqueta `dataset-reducido`.
 
 ---
 
 ## Resultados
 
-### Referencia: dataset reducido (317 / 40 / 41)
-
-Conjunto de test: ~41 imágenes que no se habían visto en ningún momento del
-entrenamiento. Se evalúa el checkpoint que mejor mIoU dio en validación, con
-*test-time augmentation* por volteos.
+Conjunto de test: 426 imágenes de la partición `test` oficial que no se han visto en
+ningún momento del entrenamiento. Se evalúa el checkpoint que mejor mIoU dio en
+validación, con *test-time augmentation* por volteos.
 
 | Métrica | 10 clases | Sin *Background* |
 |---|---:|---:|
-| mIoU | 0.714 | 0.777 |
-| Dice | 0.809 | 0.871 |
-| Pixel accuracy | 0.927 | — |
+| mIoU | 0.732 | 0.754 |
+| Dice | 0.841 | 0.857 |
+| Pixel accuracy | 0.910 | — |
 
 Desglose por clase:
 
 | Clase | Dice | IoU |
 |---|---:|---:|
-| Water | 0.955 | 0.915 |
-| Grass | 0.950 | 0.905 |
-| Building-flooded | 0.908 | 0.831 |
-| Building-non-flooded | 0.891 | 0.803 |
-| Tree | 0.883 | 0.790 |
-| Road-non-flooded | 0.875 | 0.777 |
-| Pool | 0.837 | 0.719 |
-| Road-flooded | 0.809 | 0.679 |
-| Vehicle | 0.729 | 0.573 |
-| Background | 0.251 | 0.144 |
+| Grass | 0.939 | 0.884 |
+| Road-non-flooded | 0.909 | 0.833 |
+| Tree | 0.898 | 0.815 |
+| Building-non-flooded | 0.892 | 0.806 |
+| Water | 0.871 | 0.772 |
+| Building-flooded | 0.829 | 0.707 |
+| Pool | 0.810 | 0.680 |
+| Road-flooded | 0.800 | 0.666 |
+| Vehicle | 0.770 | 0.626 |
+| Background | 0.689 | 0.526 |
 
-Las dos tablas son la misma medición: el mIoU de 0.714 es exactamente la media
-de la columna IoU, y 0.777 esa misma media dejando *Background* fuera. Ambas
+Las dos tablas son la misma medición: el mIoU de 0.732 es exactamente la media
+de la columna IoU, y 0.754 esa misma media dejando *Background* fuera. Ambas
 salen de una única matriz de confusión acumulada sobre todo el test, no de
 promediar resultados por lote.
 
-Estas cifras **no se podrán comparar directamente** con las del dataset completo:
-aquel test eran 41 imágenes con máscaras corregidas a mano y el nuevo son 426 con las
-máscaras oficiales, que tienen errores de anotación (ver *Los datos*). Lo que sí es
-comparable es la clasificación entre los tres modelos, porque los tres se miden igual.
+Tres lecturas:
+
+- **Las clases inundadas funcionan.** *Building-flooded* llega a 0.707 de IoU y
+  *Road-flooded* a 0.666, que son las dos clases que de verdad importan para la
+  tarea, pese a aparecer solo en ~150 de las 1.387 imágenes de entrenamiento.
+- **El punto débil sigue siendo *Vehicle*** (0.626): los coches ocupan pocos píxeles a
+  512×512 y se pierden en el reescalado. Aun así es la clase que más mejora frente a
+  la versión anterior (0.573).
+- **El test es ahora diez veces mayor** (426 imágenes frente a 41), así que las
+  diferencias de un par de puntos entre modelos ya dicen algo.
+
+### Frente a la versión con el dataset reducido
+
+| Métrica | Dataset reducido (41 test) | Dataset completo (426 test) |
+|---|---:|---:|
+| mIoU (10 clases) | 0.714 | 0.732 |
+| mIoU (sin *Background*) | 0.777 | 0.754 |
+| Dice (10 clases) | 0.809 | 0.841 |
+| Pixel accuracy | 0.927 | 0.910 |
+
+Estas cifras **no se pueden comparar directamente**: aquel test eran 41 imágenes con
+máscaras corregidas a mano y el nuevo son 426 con las máscaras oficiales, que tienen
+errores de anotación (ver *Los datos*). Se nota en dos clases. *Background* sube de
+0.144 a 0.526 de IoU, porque en las máscaras oficiales suele ser una región grande y
+coherente y no un resto de pocos píxeles. *Water* baja de 0.915 a 0.772, en línea con
+la confusión agua/hierba que encuentra la auditoría. Lo que sí es comparable es la
+clasificación entre los tres modelos, porque los tres se miden igual.
 
 ### Nota sobre cómo se miden
 
@@ -267,8 +287,11 @@ Un par de decisiones que merecen explicación:
   que no existen (el punto medio entre la clase 2 y la 4 sería un 3, que es otra
   clase distinta, no una mezcla).
 
-En una RTX 4060 Laptop, una época del dataset completo ronda los 4 minutos de
-entrenamiento más 1-2 de validación con TTA: unas 2,5-3 horas las 30 épocas.
+Mejores cifras de validación (434 imágenes), alcanzadas en la última época: mIoU
+0.751, Dice 0.854, accuracy 0.909.
+
+En una RTX 4060 Laptop cada época son 874 iteraciones y unos 4 minutos de
+entrenamiento, más la validación con TTA. Las 30 épocas llevaron unas 2 h 15 min.
 
 Los checkpoints se guardan en `models/` con el sufijo `_full`
 (`best_model_iou_full.pth`, `best_vit_unet_dice_full.pth`,
@@ -311,8 +334,9 @@ producía colores falseados.
 - **La pérdida de validación no es comparable con la de entrenamiento.**
   `val_loss_fn` recibe las probabilidades promediadas por el TTA y se las pasa a
   `nn.CrossEntropyLoss`, que espera logits. La curva sirve para ver la tendencia
-  y para el early stopping, pero su valor absoluto está en otra escala que el de
-  entrenamiento. Las métricas reportadas no dependen de esto.
+  y para el early stopping (que en esta ejecución nunca llegó a dispararse), pero su
+  valor absoluto está en otra escala que el de entrenamiento. Las métricas reportadas
+  no dependen de esto.
 - **No se fija semilla en PyTorch** en el cuaderno principal: la inicialización de
   pesos y el orden de los lotes cambian entre ejecuciones, así que dos
   entrenamientos no dan pesos idénticos. El split es el oficial y no depende de
@@ -334,20 +358,46 @@ Ajustes al pasar al dataset completo:
 - **YOLO11n-seg**: se mantienen las 300 épocas como techo, con `patience = 50` en lugar de 100. La
   conversión a polígonos reconstruye las 2.247 máscaras usadas con un mIoU de 0.984.
 
-Resultados de referencia con el dataset reducido (317 / 40 / 41):
-
 | | U-Net híbrido | DeepLabV3+ R50 | YOLO11n-seg |
 |---|---:|---:|---:|
-| mIoU test (10 clases) | 0.714 | 0.696 | 0.678 |
-| mIoU test (sin *Background*) | 0.777 | 0.756 | 0.738 |
+| mIoU test (10 clases) | **0.732** | 0.709 | 0.705 |
+| mIoU test (sin *Background*) | **0.754** | 0.738 | 0.739 |
+| Dice test (10 clases) | **0.841** | 0.823 | 0.818 |
+| Pixel accuracy | **0.910** | 0.908 | 0.890 |
+| Píxeles sin predicción | 0 % | 0 % | 3.0 % |
 | Parámetros | — | 26.7 M | 2.9 M |
 | TTA | sí | no | no |
+| Entrenamiento (RTX 4060 Laptop) | ~2 h 15 min, 30 épocas | 47 min, 40 épocas | 2.6 h, 235 épocas |
 | Post-proceso fuera del ONNX | — | `argmax` | NMS + máscaras + repintado |
 
+| Clase | IoU U-Net | IoU DeepLabV3+ | IoU YOLO11n-seg |
+|---|---:|---:|---:|
+| Grass | 0.884 | **0.885** | 0.871 |
+| Road-non-flooded | **0.833** | 0.831 | 0.809 |
+| Tree | 0.815 | **0.831** | **0.831** |
+| Building-non-flooded | **0.806** | 0.800 | 0.794 |
+| Water | **0.772** | 0.757 | 0.767 |
+| Building-flooded | 0.707 | 0.711 | **0.727** |
+| Pool | **0.680** | 0.647 | 0.651 |
+| Road-flooded | **0.666** | 0.612 | 0.639 |
+| Vehicle | **0.626** | 0.570 | 0.566 |
+| Background | **0.526** | 0.450 | 0.394 |
+
 - **DeepLabV3+** es un *baseline* semántico limpio (CE ponderada + Dice, sin oversampling ni TTA).
+  Queda a ~2 puntos del U-Net, que le saca la mayor ventaja en *Background*, *Vehicle*,
+  *Road-flooded* y *Pool*.
+  Su mejor época fue la 32 de 40 y el mIoU de val estaba estancado en ~0.73.
 - **YOLO11n-seg** es de instancias, y FloodNet no tiene instancias sino regiones. Para entrenarlo,
   cada componente conexa de cada clase se trata como un objeto y su contorno se convierte en
-  polígono.
+  polígono. Con el dataset completo **alcanza a DeepLabV3+ sin *Background*** (0.739 frente a 0.738)
+  con 9 veces menos parámetros, y es el mejor de los tres en *Building-flooded*. El umbral de
+  confianza elegido en val baja a 0.25 y los píxeles sin cubrir, del 4.7 % al 3.0 %. Paró en la
+  época 235 por *early stopping*.
+- Los dos ONNX reproducen a su modelo de PyTorch: la diferencia de mIoU en test es de 0.00002
+  (DeepLab) y 0.0003 (YOLO).
+
+Con el dataset reducido (317 / 40 / 41) las cifras eran 0.714 / 0.696 / 0.678 de mIoU para U-Net,
+DeepLabV3+ y YOLO, en el mismo orden que ahora.
 
 Cada cuaderno tiene una celda **P** con todos los parámetros. Esa celda se vuelca, junto con la lista
 de imágenes de cada partición, el contrato de entrada/salida del ONNX y los resultados, a
@@ -369,6 +419,9 @@ compilan contra CUDA 13 y no cargan junto a PyTorch cu126.
 
 ## Por dónde seguir
 
+- Entrenar el U-Net más épocas. La mejor época de validación fue la última (la 30) y
+  el mIoU de val seguía subiendo despacio; con `CosineAnnealingWarmRestarts`
+  (T₀ = 10, T_mult = 2) el siguiente final de ciclo es la época 70.
 - Limpiar las máscaras oficiales de val y test, aunque sea en una muestra, para tener
   una referencia sin ruido con la que calibrar cuánto penaliza el ruido actual.
 - Probar resolución 768 o inferencia por tiles. *Vehicle* es la clase que más lo
