@@ -398,33 +398,34 @@ Ajustes al pasar al dataset completo:
 
 - **DeepLabV3+**: 40 épocas en lugar de 80. Cada época tiene ahora 173 lotes en vez de 39, así que
   el entrenamiento hace más del doble de pasos que antes.
-- **YOLO11n-seg**: se mantienen las 300 épocas como techo, con `patience = 50` en lugar de 100. La
-  conversión a polígonos reconstruye las 2.247 máscaras usadas con un mIoU de 0.984.
+- **YOLO11n-seg**: se mantienen las 300 épocas como techo, con `patience = 50` en lugar de 100. Se
+  entrena con 9 clases, sin *Background* (ver abajo). La conversión a polígonos reconstruye las
+  2.247 máscaras usadas con un mIoU de 0.977.
 
 | | U-Net híbrido | DeepLabV3+ R50 | YOLO11n-seg |
 |---|---:|---:|---:|
-| mIoU test (10 clases) | **0.732** | 0.709 | 0.705 |
-| mIoU test (sin *Background*) | **0.754** | 0.738 | 0.739 |
-| Dice test (10 clases) | **0.841** | 0.823 | 0.818 |
-| Pixel accuracy | **0.910** | 0.908 | 0.890 |
-| Píxeles sin predicción | 0 % | 0 % | 3.0 % |
+| mIoU test (10 clases) | **0.732** | 0.709 | 0.661 |
+| mIoU test (sin *Background*) | **0.754** | 0.738 | 0.730 |
+| Dice test (10 clases) | **0.841** | 0.823 | 0.763 |
+| Pixel accuracy | **0.910** | 0.908 | 0.883 |
+| Píxeles sin instancia (→ *Background*) | — | — | 3.1 % |
 | Parámetros | — | 26.7 M | 2.9 M |
 | TTA | sí | no | no |
-| Entrenamiento (RTX 4060 Laptop) | ~2 h 15 min, 30 épocas | 47 min, 40 épocas | 2.6 h, 235 épocas |
+| Entrenamiento (RTX 4060 Laptop) | ~2 h 15 min, 30 épocas | 47 min, 40 épocas | 2.1 h, 268 épocas |
 | Post-proceso fuera del ONNX | — | `argmax` | NMS + máscaras + repintado |
 
 | Clase | IoU U-Net | IoU DeepLabV3+ | IoU YOLO11n-seg |
 |---|---:|---:|---:|
-| Grass | 0.884 | **0.885** | 0.871 |
-| Road-non-flooded | **0.833** | 0.831 | 0.809 |
-| Tree | 0.815 | **0.831** | **0.831** |
-| Building-non-flooded | **0.806** | 0.800 | 0.794 |
-| Water | **0.772** | 0.757 | 0.767 |
-| Building-flooded | 0.707 | 0.711 | **0.727** |
-| Pool | **0.680** | 0.647 | 0.651 |
-| Road-flooded | **0.666** | 0.612 | 0.639 |
-| Vehicle | **0.626** | 0.570 | 0.566 |
-| Background | **0.526** | 0.450 | 0.394 |
+| Grass | 0.884 | **0.885** | 0.870 |
+| Road-non-flooded | **0.833** | 0.831 | 0.821 |
+| Tree | 0.815 | 0.831 | **0.834** |
+| Building-non-flooded | **0.806** | 0.800 | 0.769 |
+| Water | **0.772** | 0.757 | 0.716 |
+| Building-flooded | 0.707 | **0.711** | 0.704 |
+| Pool | **0.680** | 0.647 | 0.661 |
+| Road-flooded | **0.666** | 0.612 | 0.646 |
+| Vehicle | **0.626** | 0.570 | 0.552 |
+| Background | **0.526** | 0.450 | 0.036 |
 
 - **DeepLabV3+** es un *baseline* semántico limpio (CE ponderada + Dice, sin oversampling ni TTA).
   Queda a ~2 puntos del U-Net, que le saca la mayor ventaja en *Background*, *Vehicle*,
@@ -432,12 +433,16 @@ Ajustes al pasar al dataset completo:
   Su mejor época fue la 32 de 40 y el mIoU de val estaba estancado en ~0.73.
 - **YOLO11n-seg** es de instancias, y FloodNet no tiene instancias sino regiones. Para entrenarlo,
   cada componente conexa de cada clase se trata como un objeto y su contorno se convierte en
-  polígono. Con el dataset completo **alcanza a DeepLabV3+ sin *Background*** (0.739 frente a 0.738)
-  con 9 veces menos parámetros, y es el mejor de los tres en *Building-flooded*. El umbral de
-  confianza elegido en val baja a 0.25 y los píxeles sin cubrir, del 4.7 % al 3.0 %. Paró en la
-  época 235 por *early stopping*.
+  polígono. *Background* no es una de sus clases: es lo que no cubre ninguna instancia, el mismo
+  `background` que Ultralytics añade a su matriz de confusión. Así esa matriz no tiene dos fondos,
+  pero sale caro. Con *Background* como clase más, YOLO alcanzaba a DeepLabV3+ sin *Background*
+  (0.739 frente a 0.738) y sacaba 0.705 de mIoU con 10 clases. Sin ella baja a 0.730 y 0.661: el
+  modelo no aprende a dejar sin cubrir las zonas de *Background*, que acaban pintadas sobre todo como
+  *Water* y *Grass*, y los huecos entre sus instancias caen casi siempre en imágenes sin
+  *Background*. Su IoU pasa de 0.394 a 0.036. YOLO sigue siendo el mejor en *Tree* con 9 veces menos
+  parámetros que DeepLabV3+. Paró en la época 268 por *early stopping*.
 - Los dos ONNX reproducen a su modelo de PyTorch: la diferencia de mIoU en test es de 0.00002
-  (DeepLab) y 0.0003 (YOLO).
+  (DeepLab) y 0.00001 (YOLO).
 
 Con el dataset reducido (317 / 40 / 41) las cifras eran 0.714 / 0.696 / 0.678 de mIoU para U-Net,
 DeepLabV3+ y YOLO, en el mismo orden que ahora.
@@ -450,7 +455,7 @@ de imágenes de cada partición, el contrato de entrada/salida del ONNX y los re
 | Fichero | Salidas |
 |---|---|
 | `models/deeplabv3plus_r50_floodnet_full.onnx` | `logits` 1×10×512×512 |
-| `models/yolo11n_seg_floodnet_full.onnx` | `output0` 1×46×5376 (cajas, clases, coeficientes) · `output1` 1×32×128×128 (prototipos) |
+| `models/yolo11n_seg_floodnet_full.onnx` | `output0` 1×45×5376 (cajas, 9 clases, coeficientes) · `output1` 1×32×128×128 (prototipos) |
 
 Todos los artefactos del dataset completo llevan el sufijo `_full` (y `runs/yolo/yolo11n-seg-full`
 para YOLO), de modo que los del entrenamiento anterior siguen en su sitio.
